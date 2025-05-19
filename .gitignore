@@ -1,0 +1,9 @@
+# SSH Keys
+id_*
+*_id_*
+.ssh/
+id_rsa
+id_dsa
+id_ed25519
+mastotagsIDkey.txt
+mastotagsIDkey.txt.pub

@@ -8,7 +8,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const createMastowallBtn = document.getElementById('create-mastowall-btn');
 
     // Mastodon API Endpunkte
-    const MASTODON_INSTANCE = 'https://mastodon.social';
+    const MASTODON_INSTANCES = [ 
+        'https://mastodon.social',
+        'https://wisskomm.social',
+        'https://openbiblio.social',
+        'https://mathstodon.xyz',
+        'https://higher-edu.social',
+        'https://social.edu.nl',
+        'https://archaeo.social',
+        'https://mstdn.science',
+        'https://newsie.social',
+        'https://fediscience.org',
+        'https://social.fz-juelich.de',
+        'https://sciences.social',
+        'https://meteo.social',
+        'https://scicomm.xyz',
+        'https://bildung.social',
+        'https://genomic.social',
+        'https://literatur.social',
+        'https://sciencemastodon.com',
+        'https://podcasts.social',
+        'https://masto.ai',
+        'https://astrodon.social',
+        'https://reporter.social',
+        'https://colearn.social',
+        'https://econtwitter.net',
+        'https://scholar.social',
+        'https://urbanists.social',
+        'https://idw-online.social',
+        'https://helmholtz.social',
+        'https://academiccloud.social',
+        'https://hcommons.social',
+        'https://akademienl.social',
+        'https://mastodon.lawprofs.org',
+        'https://social.mpdl.mpg.de',
+        'https://legal.social',
+        'https://sciencemediacenter.social',
+        'https://w3c.social',
+        'https://social.uibk.ac.at'
+
+    ];
+    
+    const DEFAULT_MASTODON_INSTANCE = 'https://mastodon.social';
+
     const PUBLIC_TIMELINE_API = `${MASTODON_INSTANCE}/api/v1/timelines/public`;
     const TAG_TIMELINE_API = `${MASTODON_INSTANCE}/api/v1/timelines/tag`;
     const SEARCH_API = `${MASTODON_INSTANCE}/api/v2/search`;

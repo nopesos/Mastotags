@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createMastowallBtn = document.getElementById('create-mastowall-btn');
 
     // Mastodon API Endpunkte
-    const MASTODON_INSTANCES = [ 
+    const MASTODON_INSTANCES = [
         'https://mastodon.social',
         'https://wisskomm.social',
         'https://openbiblio.social',
@@ -48,24 +48,22 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://social.uibk.ac.at'
 
     ];
-    
+
     const DEFAULT_MASTODON_INSTANCE = 'https://mastodon.social';
 
-    const PUBLIC_TIMELINE_API = `${MASTODON_INSTANCE}/api/v1/timelines/public`;
-    const TAG_TIMELINE_API = `${MASTODON_INSTANCE}/api/v1/timelines/tag`;
-    const SEARCH_API = `${MASTODON_INSTANCE}/api/v2/search`;
+
 
     // Settings for extended search
     const MAX_RELATED_HASHTAGS = 5;
     const MAX_DEPTH = 1; // Depth of recursive search
     const MAX_SELECTED_HASHTAGS = 3; // Maximum number of selected hashtags
-    
+
     // Array for selected hashtags
     let selectedHashtags = [];
 
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const query = searchTerm.value.trim();
         if (!query) return;
 
@@ -89,9 +87,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Main function: Performs an extended search with aggregation of results
     async function findRelatedHashtagsExtended(query) {
+
+        const globalTootsMap = new Map();
+        let anyResultsFound = false;
+
+        for (const instance of MASTODON_INSTANCES)
+            try {
+                console.log(`Searching instance: ${instance} for "${query}"`)
+
+                const PUBLIC_TIMELINE_API = `${instance}/api/v1/timelines/public`;
+                const TAG_TIMELINE_API = `${instance}/api/v1/timelines/tag`;
+                const SEARCH_API = `${instance}/api/v2/search`;
+
+                let searchResults;
+                try{
+                    const searchResponse = await fetch(`${SEARCH_API}?q=${encodeURIComponent(query)}&type=hashtags&limit=5`);
+                    if (searchResponse.ok) {
+                        searchResults = await searchResponse.json();
+                    } else {
+                        console.warn(`Hashtag search failed on ${instance}, using alternative method`);
+                        searchResults = { hashtags: [] };
+                    }
+                } catch (error) {
+                    console.warn(`Hashtag search failed on ${instance}:`, error);
+                    searchResults = { hashtags: [] };
+                    continue; // Try the next instance
+                }
+            }
+
         // Get initial results for the main search term and capture all found toots
         const { hashtags: primaryResults, tootsMap: initialTootsMap } = await searchSingleHashtag(query, true);
-        
+
         if (primaryResults.length === 0) {
             throw new Error(`No hashtags found for "${query}".`);
         }
@@ -100,29 +126,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const topRelatedTags = primaryResults
             .slice(0, MAX_RELATED_HASHTAGS)
             .map(tag => tag.name);
-        
+
         console.log(`Top related hashtags for '${query}': ${topRelatedTags.join(', ')}`);
-        
+
         // Perform a search for each top hashtag
         const allResults = [...primaryResults]; // Results from the main search term
         const processedTags = new Set([query.toLowerCase().replace(/^#/, '')]);
-        
+
         // Start with the initial toots map for cross-function deduplication
         const tootsMap = initialTootsMap;
-        
+
         // Secondary searches for each of the top hashtags
         for (const relatedTag of topRelatedTags) {
             // Don't search the same hashtags multiple times
             if (processedTags.has(relatedTag.toLowerCase())) {
                 continue;
             }
-            
+
             processedTags.add(relatedTag.toLowerCase());
-            
+
             try {
                 console.log(`Searching for related hashtags for #${relatedTag}...`);
                 const tagResponse = await fetch(`${TAG_TIMELINE_API}/${relatedTag}?limit=30`);
-                
+
                 if (tagResponse.ok) {
                     const tagToots = await tagResponse.json();
                     // Add toots to the map using ID as key to avoid duplicates
@@ -136,14 +162,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn(`Error retrieving #${relatedTag}:`, error);
             }
         }
-        
+
         // Convert the Map to an array of unique toots
         const uniqueToots = Array.from(tootsMap.values());
         console.log(`Found ${uniqueToots.length} unique toots after deduplication across all searches`);
-        
+
         // Extract all hashtags from the collected toots
         const hashtagCounts = {};
-        
+
         uniqueToots.forEach(toot => {
             if (toot.tags && Array.isArray(toot.tags)) {
                 toot.tags.forEach(tag => {
@@ -155,14 +181,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Convert to array and sort by frequency
         const sortedHashtags = Object.entries(hashtagCounts)
-            .map(([name, count]) => ({ 
-                name, 
+            .map(([name, count]) => ({
+                name,
                 count,
                 // Mark the original search term, but don't change the sorting
                 isOriginal: name.toLowerCase() === query.toLowerCase().replace(/^#/, '')
             }))
             .sort((a, b) => b.count - a.count);
-        
+
         return sortedHashtags;
     }
 
@@ -186,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Step 2: Collect toots from various sources - use a Map to deduplicate by ID
         const tootsMap = new Map();
-        
+
         // 2a: If hashtags were found, get their timelines
         const foundHashtags = searchResults.hashtags || [];
         for (const tag of foundHashtags.slice(0, 3)) { // Limit to the first 3
@@ -205,30 +231,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn(`Error retrieving hashtag #${tag.name}:`, error);
             }
         }
-        
+
         // 2b: Also search in the public timeline
         try {
             const publicResponse = await fetch(`${PUBLIC_TIMELINE_API}?limit=40`);
             if (publicResponse.ok) {
                 const publicToots = await publicResponse.json();
-                
+
                 // Only add toots that contain the search term (in content or hashtags)
                 const relevantPublicToots = publicToots.filter(toot => {
                     // Check content
                     if (toot.content.toLowerCase().includes(query.toLowerCase())) {
                         return true;
                     }
-                    
+
                     // Check hashtags
                     if (toot.tags && Array.isArray(toot.tags)) {
-                        return toot.tags.some(tag => 
+                        return toot.tags.some(tag =>
                             tag.name.toLowerCase().includes(query.toLowerCase())
                         );
                     }
-                    
+
                     return false;
                 });
-                
+
                 // Add relevant toots to the map, avoiding duplicates
                 relevantPublicToots.forEach(toot => {
                     if (!tootsMap.has(toot.id)) {
@@ -243,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Convert the Map to an array of unique toots
         const uniqueToots = Array.from(tootsMap.values());
         console.log(`Found ${uniqueToots.length} unique toots in single hashtag search`);
-        
+
         // If no results were found
         if (uniqueToots.length === 0) {
             return returnToots ? { hashtags: [], tootsMap } : [];
@@ -251,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Step 3: Extract all hashtags from the found toots
         const hashtagCounts = {};
-        
+
         uniqueToots.forEach(toot => {
             if (toot.tags && Array.isArray(toot.tags)) {
                 toot.tags.forEach(tag => {
@@ -281,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hashtags.forEach((tag, index) => {
             const listItem = document.createElement('li');
             listItem.className = 'list-group-item hashtag-card';
-            
+
             // Determine popularity class
             if (tag.isOriginal) {
                 listItem.classList.add('popularity-original');
@@ -296,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Container for all elements in one row
             const contentDiv = document.createElement('div');
             contentDiv.className = 'hashtag-content d-flex align-items-center';
-            
+
             // 1. Hashtag as link to Mastowall
             const hashtagLink = document.createElement('a');
             hashtagLink.className = 'hashtag-name me-3';
@@ -304,25 +330,25 @@ document.addEventListener('DOMContentLoaded', () => {
             hashtagLink.target = '_blank';
             hashtagLink.rel = 'noopener noreferrer';
             hashtagLink.textContent = `#${tag.name}`;
-            
+
             // Stop event propagation for the link
             hashtagLink.addEventListener('click', (e) => {
                 e.stopPropagation();
             });
-            
+
             // 2. Progress bar in the middle with flex-grow
             const progressContainer = document.createElement('div');
             progressContainer.className = 'progress-container';
-            
+
             const progressBar = document.createElement('div');
             progressBar.className = 'progress';
-            
+
             const progressBarInner = document.createElement('div');
             progressBarInner.className = 'progress-bar';
-            
+
             // Calculate percentage for bar length
             const percentage = (tag.count / maxCount) * 100;
-            
+
             // Bar color based on popularity
             if (tag.isOriginal) {
                 progressBarInner.classList.add('bg-primary');
@@ -333,54 +359,54 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 progressBarInner.classList.add('bg-secondary');
             }
-            
+
             progressBarInner.style.width = `${percentage}%`;
             progressBarInner.setAttribute('aria-valuenow', percentage);
             progressBarInner.setAttribute('aria-valuemin', 0);
             progressBarInner.setAttribute('aria-valuemax', 100);
-            
+
             progressBar.appendChild(progressBarInner);
             progressContainer.appendChild(progressBar);
-            
+
             // 3. Count of occurrences
             const count = document.createElement('span');
             count.className = 'hashtag-count ms-3 me-4';
             count.textContent = tag.count;
-            
+
             // 4. Checkbox for selection
             const checkboxContainer = document.createElement('div');
             checkboxContainer.className = 'form-check';
-            
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.className = 'form-check-input hashtag-checkbox';
             checkbox.id = `hashtag-${tag.name}`;
             checkbox.value = tag.name;
-            
+
             // Select the first three hashtags by default
             if (index < MAX_SELECTED_HASHTAGS) {
                 checkbox.checked = true;
                 selectedHashtags.push(tag.name);
             }
-            
-            checkbox.addEventListener('change', function() {
+
+            checkbox.addEventListener('change', function () {
                 handleHashtagSelection(this);
             });
-            
+
             // Stop event propagation for the checkbox
             checkbox.addEventListener('click', (e) => {
                 e.stopPropagation();
             });
-            
+
             checkboxContainer.appendChild(checkbox);
-            
+
             // Assemble all elements
             contentDiv.appendChild(hashtagLink);
             contentDiv.appendChild(progressContainer);
             contentDiv.appendChild(count);
             contentDiv.appendChild(checkboxContainer);
             listItem.appendChild(contentDiv);
-            
+
             // Make entire row clickable
             listItem.style.cursor = 'pointer';
             listItem.addEventListener('click', () => {
@@ -390,29 +416,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 const changeEvent = new Event('change');
                 checkbox.dispatchEvent(changeEvent);
             });
-            
+
             hashtagsList.appendChild(listItem);
         });
-        
+
         // Update Mastowall button after loading hashtags
         updateMastowallButton();
     }
-    
+
     // Function to manage hashtag selection (max 3)
     function handleHashtagSelection(checkbox) {
         const hashtag = checkbox.value;
-        
+
         if (checkbox.checked) {
             // Check if 3 hashtags are already selected
             if (selectedHashtags.length >= MAX_SELECTED_HASHTAGS) {
                 // Show warning
                 alert(`You can select a maximum of ${MAX_SELECTED_HASHTAGS} hashtags. Please deselect another hashtag first.`);
-                
+
                 // Uncheck the checkbox
                 checkbox.checked = false;
                 return;
             }
-            
+
             // Add hashtag to the list
             selectedHashtags.push(hashtag);
         } else {
@@ -422,11 +448,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedHashtags.splice(index, 1);
             }
         }
-        
+
         // Update button status
         updateMastowallButton();
     }
-    
+
     // Function to update the Mastowall button
     function updateMastowallButton() {
         if (createMastowallBtn) {
@@ -437,16 +463,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 createMastowallBtn.classList.add('disabled');
                 createMastowallBtn.setAttribute('aria-disabled', 'true');
             }
-            
+
             // Update URL for the button
             const hashtagsParam = selectedHashtags.join(',');
             createMastowallBtn.href = `https://rstockm.github.io/mastowall/?hashtags=${hashtagsParam}&server=https://mastodon.social`;
         }
     }
-    
+
     // Event listener for the "Create Mastowall" button
     if (createMastowallBtn) {
-        createMastowallBtn.addEventListener('click', function(e) {
+        createMastowallBtn.addEventListener('click', function (e) {
             if (selectedHashtags.length === 0) {
                 e.preventDefault();
                 alert('Please select at least one hashtag.');

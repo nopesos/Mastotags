@@ -86,21 +86,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Main function: Performs an extended search with aggregation of results
-    async function findRelatedHashtagsExtended(query) {
-
+        async function findRelatedHashtagsExtended(query) {
+        // Global map for toots across all instances for deduplication
         const globalTootsMap = new Map();
         let anyResultsFound = false;
-
-        for (const instance of MASTODON_INSTANCES)
+        
+        // Loop through all Mastodon instances
+        for (const instance of MASTODON_INSTANCES) {
             try {
-                console.log(`Searching instance: ${instance} for "${query}"`)
-
+                console.log(`Searching instance: ${instance} for "${query}"`);
+                
+                // Set up API endpoints for this instance
                 const PUBLIC_TIMELINE_API = `${instance}/api/v1/timelines/public`;
                 const TAG_TIMELINE_API = `${instance}/api/v1/timelines/tag`;
                 const SEARCH_API = `${instance}/api/v2/search`;
-
+                
+                // Step 1: Search for the hashtag using the search API
                 let searchResults;
-                try{
+                try {
                     const searchResponse = await fetch(`${SEARCH_API}?q=${encodeURIComponent(query)}&type=hashtags&limit=5`);
                     if (searchResponse.ok) {
                         searchResults = await searchResponse.json();
@@ -113,63 +116,124 @@ document.addEventListener('DOMContentLoaded', () => {
                     searchResults = { hashtags: [] };
                     continue; // Try the next instance
                 }
+        
+                // Step 2: Collect toots from various sources
+                const foundHashtags = searchResults.hashtags || [];
+                for (const tag of foundHashtags.slice(0, 3)) { // Limit to the first 3
+                    try {
+                        const tagResponse = await fetch(`${TAG_TIMELINE_API}/${tag.name}?limit=30`);
+                        if (tagResponse.ok) {
+                            const tagToots = await tagResponse.json();
+                            // Add toots to the map using ID as key to avoid duplicates
+                            tagToots.forEach(toot => {
+                                // Add instance information
+                                toot.source_instance = instance;
+                                if (!globalTootsMap.has(toot.id)) {
+                                    globalTootsMap.set(toot.id, toot);
+                                    anyResultsFound = true;
+                                }
+                            });
+                        }
+                    } catch (error) {
+                        console.warn(`Error retrieving hashtag #${tag.name} from ${instance}:`, error);
+                    }
+                }
+                
+                // Also search in the public timeline of this instance
+                try {
+                    const publicResponse = await fetch(`${PUBLIC_TIMELINE_API}?limit=40`);
+                    if (publicResponse.ok) {
+                        const publicToots = await publicResponse.json();
+                        
+                        // Only add toots that contain the search term (in content or hashtags)
+                        const relevantPublicToots = publicToots.filter(toot => {
+                            // Check content
+                            if (toot.content.toLowerCase().includes(query.toLowerCase())) {
+                                return true;
+                            }
+                            
+                            // Check hashtags
+                            if (toot.tags && Array.isArray(toot.tags)) {
+                                return toot.tags.some(tag => 
+                                    tag.name.toLowerCase().includes(query.toLowerCase())
+                                );
+                            }
+                            
+                            return false;
+                        });
+                        
+                        // Add relevant toots to the map, avoiding duplicates
+                        relevantPublicToots.forEach(toot => {
+                            // Add instance information
+                            toot.source_instance = instance;
+                            if (!globalTootsMap.has(toot.id)) {
+                                globalTootsMap.set(toot.id, toot);
+                                anyResultsFound = true;
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`Error retrieving public timeline from ${instance}:`, error);
+                }
+            } catch (instanceError) {
+                console.warn(`Failed to search instance ${instance}:`, instanceError);
+                // Continue with next instance
             }
-
-        // Get initial results for the main search term and capture all found toots
-        const { hashtags: primaryResults, tootsMap: initialTootsMap } = await searchSingleHashtag(query, true);
-
-        if (primaryResults.length === 0) {
-            throw new Error(`No hashtags found for "${query}".`);
+        }
+        
+        // If no results were found across any instance
+        if (!anyResultsFound || globalTootsMap.size === 0) {
+            throw new Error(`No hashtags found for "${query}" across any instances.`);
         }
 
-        // Find the top hashtags from the primary results
-        const topRelatedTags = primaryResults
-            .slice(0, MAX_RELATED_HASHTAGS)
-            .map(tag => tag.name);
-
-        console.log(`Top related hashtags for '${query}': ${topRelatedTags.join(', ')}`);
-
-        // Perform a search for each top hashtag
-        const allResults = [...primaryResults]; // Results from the main search term
+        // Convert the Map to an array of unique toots
+        let uniqueToots = Array.from(globalTootsMap.values());
+        console.log(`Found ${uniqueToots.length} unique toots after deduplication across all instances`);
+        
+        // Find top related hashtags across all instances
+        const topRelatedHashtags = extractTopHashtags(uniqueToots, query);
+        
+        // For each top hashtag, search all instances for more related content
         const processedTags = new Set([query.toLowerCase().replace(/^#/, '')]);
-
-        // Start with the initial toots map for cross-function deduplication
-        const tootsMap = initialTootsMap;
-
-        // Secondary searches for each of the top hashtags
-        for (const relatedTag of topRelatedTags) {
+        
+        for (const relatedTag of topRelatedHashtags) {
             // Don't search the same hashtags multiple times
             if (processedTags.has(relatedTag.toLowerCase())) {
                 continue;
             }
-
+            
             processedTags.add(relatedTag.toLowerCase());
-
-            try {
-                console.log(`Searching for related hashtags for #${relatedTag}...`);
-                const tagResponse = await fetch(`${TAG_TIMELINE_API}/${relatedTag}?limit=30`);
-
-                if (tagResponse.ok) {
-                    const tagToots = await tagResponse.json();
-                    // Add toots to the map using ID as key to avoid duplicates
-                    tagToots.forEach(toot => {
-                        if (!tootsMap.has(toot.id)) {
-                            tootsMap.set(toot.id, toot);
-                        }
-                    });
+            
+            // Search this hashtag across all instances
+            for (const instance of MASTODON_INSTANCES) {
+                try {
+                    console.log(`Searching for related hashtags for #${relatedTag} on ${instance}...`);
+                    const TAG_TIMELINE_API = `${instance}/api/v1/timelines/tag`;
+                    const tagResponse = await fetch(`${TAG_TIMELINE_API}/${relatedTag}?limit=30`);
+                    
+                    if (tagResponse.ok) {
+                        const tagToots = await tagResponse.json();
+                        // Add toots to the global map
+                        tagToots.forEach(toot => {
+                            // Add instance information
+                            toot.source_instance = instance;
+                            if (!globalTootsMap.has(toot.id)) {
+                                globalTootsMap.set(toot.id, toot);
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`Error retrieving #${relatedTag} on ${instance}:`, error);
                 }
-            } catch (error) {
-                console.warn(`Error retrieving #${relatedTag}:`, error);
             }
         }
-
-        // Convert the Map to an array of unique toots
-        const uniqueToots = Array.from(tootsMap.values());
-        console.log(`Found ${uniqueToots.length} unique toots after deduplication across all searches`);
-
+        
         // Extract all hashtags from the collected toots
         const hashtagCounts = {};
-
+        const originalQuery = query.toLowerCase().replace(/^#/, '');
+        
+        uniqueToots = Array.from(globalTootsMap.values()); // Refresh with all collected toots
+        
         uniqueToots.forEach(toot => {
             if (toot.tags && Array.isArray(toot.tags)) {
                 toot.tags.forEach(tag => {
@@ -181,18 +245,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Convert to array and sort by frequency
         const sortedHashtags = Object.entries(hashtagCounts)
-            .map(([name, count]) => ({
-                name,
+            .map(([name, count]) => ({ 
+                name, 
                 count,
                 // Mark the original search term, but don't change the sorting
-                isOriginal: name.toLowerCase() === query.toLowerCase().replace(/^#/, '')
+                isOriginal: name.toLowerCase() === originalQuery
             }))
             .sort((a, b) => b.count - a.count);
-
+        
         return sortedHashtags;
     }
 
-    // Helper function: Performs a single hashtag search
+    // Helper function to extract top hashtags from a set of toots
+    function extractTopHashtags(toots, query, limit = MAX_RELATED_HASHTAGS) {
+        const hashtagCounts = {};
+        const originalQuery = query.toLowerCase().replace(/^#/, '');
+        
+        toots.forEach(toot => {
+            if (toot.tags && Array.isArray(toot.tags)) {
+                toot.tags.forEach(tag => {
+                    const name = tag.name.toLowerCase();
+                    hashtagCounts[name] = (hashtagCounts[name] || 0) + 1;
+                });
+            }
+        });
+        
+        // Convert to array, sort by frequency, and return top N
+        return Object.entries(hashtagCounts)
+            .map(([name, count]) => name)
+            .filter(name => name.toLowerCase() !== originalQuery) // Exclude original query
+            .sort((a, b) => hashtagCounts[b] - hashtagCounts[a])
+            .slice(0, limit);
+    }
+
+    // Helper function: Performs a single hashtag search, depricated
     // returnToots parameter determines whether to return the toots map for deduplication
     async function searchSingleHashtag(query, returnToots = false) {
         // Step 1: Search for the hashtag using the search API
@@ -326,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Hashtag as link to Mastowall
             const hashtagLink = document.createElement('a');
             hashtagLink.className = 'hashtag-name me-3';
-            hashtagLink.href = `https://rstockm.github.io/mastowall/?hashtags=${tag.name}&server=https://mastodon.social`;
+            hashtagLink.href = `https://rstockm.github.io/mastowall/?hashtags=${tag.name}&server=${DEFAULT_MASTOWALL_INSTANCE}`;
             hashtagLink.target = '_blank';
             hashtagLink.rel = 'noopener noreferrer';
             hashtagLink.textContent = `#${tag.name}`;

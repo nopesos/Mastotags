@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://higher-edu.social',
         'https://social.edu.nl',
         'https://archaeo.social',
+        //doesnt always deliver usable data, network issue?
         'https://mstdn.science',
         'https://newsie.social',
         'https://fediscience.org',
@@ -33,15 +34,18 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://reporter.social',
         'https://colearn.social',
         'https://econtwitter.net',
-        'https://scholar.social',
+        //does not like to process my request (422 Unprocessable Content), better not bother them with requests
+        //'https://scholar.social',
         'https://urbanists.social',
         'https://idw-online.social',
         'https://helmholtz.social',
         'https://academiccloud.social',
         'https://hcommons.social',
         'https://akademienl.social',
-        'https://mastodon.lawprofs.org',
-        'https://social.mpdl.mpg.de',
+        //doesnt seem to be active (ERR_NAME_NOT_RESOLVED)
+        //'https://mastodon.lawprofs.org',
+        //doesnt seem to be active (ERR_NAME_NOT_RESOLVED)
+        //'https://social.mpdl.mpg.de',
         'https://legal.social',
         'https://sciencemediacenter.social',
         'https://w3c.social',

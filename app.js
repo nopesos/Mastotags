@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ];
 
-    const DEFAULT_MASTODON_INSTANCE = 'https://mastodon.social';
+    const DEFAULT_MASTOWALL_INSTANCE = 'https://mastodon.social';
 
 
 

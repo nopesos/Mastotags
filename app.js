@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createMastowallBtn = document.getElementById('create-mastowall-btn');
 
     //Server setup cmd: python3 -m http.server 8000, or python -m http.server 8000
+    //Server local address: http://localhost:8000/
     // Mastodon API Endpunkte
     const MASTODON_INSTANCES = [
         'https://mastodon.social',

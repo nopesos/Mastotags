@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorMessage = document.getElementById('error-message');
     const createMastowallBtn = document.getElementById('create-mastowall-btn');
 
+    //Server setup cmd: python3 -m http.server 8000
     // Mastodon API Endpunkte
     const MASTODON_INSTANCES = [
         'https://mastodon.social',

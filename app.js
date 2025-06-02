@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://higher-edu.social',
         'https://social.edu.nl',
         'https://archaeo.social',
-        //doesnt always deliver usable data, network issue?
-        'https://mstdn.science',
+        //doesnt always deliver usable data, network issue? the issue is persistant
+        //'https://mstdn.science',
         'https://newsie.social',
         'https://fediscience.org',
         'https://social.fz-juelich.de',

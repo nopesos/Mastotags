@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://social.edu.nl',
         'https://archaeo.social',
         //doesnt always deliver usable data, network issue? the issue is persistant
-        //even more interesting, the instance still gets searched even if it is not commented. most likely due to related toots
+        //even more interesting, the instance still gets searched even if it is commented. most likely due to related toots
         //'https://mstdn.science',
         'https://newsie.social',
         'https://fediscience.org',

@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://archaeo.social',
         //doesnt always deliver usable data, network issue? the issue is persistant
         //even more interesting, the instance still gets searched even if it is commented. most likely due to related toots
+        //the server is weird, sometimes it does react to requests, other times it goes through no problem
         //'https://mstdn.science',
         'https://newsie.social',
         'https://fediscience.org',
